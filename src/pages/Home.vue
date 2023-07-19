@@ -1,6 +1,75 @@
 <template>
   <div>
-    <Header />
+    <div>
+      <div class="container-fluid " style="background-color: black;">
+        <div class="row">
+          <div class="col-md-12">
+            <img :src="require('@/assets/logoSR.png')" style="height: 250px;">
+          </div>
+        </div>
+        <div class="d-flex justify-content-end">
+          <button
+            class="btn btn-secondary mx-2"
+            type="button"
+            @click="scrollFilter()"
+          >
+            <i class="fa fa-search"></i>
+          </button>
+        </div>
+      </div>
+      <div class="home-header" v-if="headerFilter">
+        <div class="row p-1">
+          <div class="col-2">
+            <img :src="require('@/assets/logoSR.png')" style="height: 40px" />
+          </div>
+          <div class="col-10">
+            <div class="d-flex">
+              <input v-model="dadosFitler.title" type="text" class="form-control" placeholder="Item" />
+              <button
+                class="btn btn-secondary mx-2"
+                type="button"
+                @click="buscarPecas(true)"
+              >
+                <i class="fa fa-search"></i>
+              </button>
+              <button
+                class="btn btn-danger"
+                type="button"
+                @click="filter = !filter"
+              >
+                <i class="fa" :class="filter ? 'fa-close' : 'fa-filter'"></i>
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="hearder-filter" v-if="filter">
+        <div class="d-flex flex-column pe-2" style="width: 82%">
+          <div class="d-flex">
+            <!-- <input v-model="dadosFitler.state" type="text" class="form-control" placeholder="Estado" /> -->
+            <multiselect v-model="dadosFitler.state" 
+                        :options="optionsState" 
+                        :custom-label="({ nome }) => {  return `${nome}`}" 
+                        placeholder="Select one" 
+                        label="name" 
+                        track-by="name"
+                        @input="teste()">
+
+                        </multiselect>
+            <button class="btn btn-warning ms-2 pl-4 pr-3" type="button">Limpar</button>
+          </div>
+          <input v-model="dadosFitler.city" type="text" class="form-control mt-2 me-2" placeholder="Cidade" />
+          <div class="d-flex mt-2">
+            <input v-model="dadosFitler.value" type="text" class="form-control " placeholder="Preço" />
+            <input @click="valueCondition = 'min'" type="radio" class="btn-check" name="options-outlined" id="success-outlined" autocomplete="off" checked>
+            <label class="btn btn-outline-success mx-2" for="success-outlined">MIN</label>
+
+            <input @click="valueCondition = 'max'" type="radio" class="btn-check" name="options-outlined" id="danger-outlined" autocomplete="off">
+            <label class="btn btn-outline-danger" for="danger-outlined">MAX</label>
+          </div>
+        </div>
+      </div>
+    </div>
     <div class="container mt-5 mb-3">
       <div class="row">
         <div class="col-md-3" v-for="(dado, index) in parts" :key="index">
@@ -53,17 +122,31 @@
 </template>
 <script>
 import Header from "@/components/Header";
+import Multiselect from 'vue-multiselect'
 
 export default {
   name: "HomeTeste",
-  components: { Header },
+  components: { Header, Multiselect },
   data() {
     return {
       parts: [],
+      page:1,
+      end:false,
+      dadosFitler:{
+        title:"",
+        state:{},
+        city:"", 
+        value:"",
+        valueCondition:"min"
+      },
+      optionsState:[],
+      filter: false,
+      headerFilter:false
     };
   },
-  created() {
-    this.buscarPecas();
+  async created() {
+    await this.buscarPecas();
+    await this.buscarState();
   },
   mounted() {
     window.addEventListener("scroll", this.verificarScroll);
@@ -72,25 +155,84 @@ export default {
     window.removeEventListener("scroll", this.verificarScroll);
   },
   methods: {
-    verificarScroll() {
+    async verificarScroll() {
+      this.filterScroll();
+      this.infintyScroll();
+    },
+    filterScroll(){
       const scrollTop = document.documentElement.scrollTop || document.body.scrollTop;
-      const scrollHeight = document.documentElement.scrollHeight || document.body.scrollHeight;
-      const clientHeight = document.documentElement.clientHeight || window.innerHeight;
-      console.log(scrollTop);      
-      console.log(scrollHeight);
-      console.log(clientHeight);      
-      if (scrollTop + clientHeight >= scrollHeight - 10) {
-        //this.parts.push(...this.parts);
+      if (scrollTop > 240) {
+        this.headerFilter = true;
+      }else{
+        this.headerFilter = false;
+        this.filter = false
       }
     },
-    buscarPecas() {
-      this.$http.get("parts").then((response) => {
-        this.parts = response.data.Data;
+    async infintyScroll(){
+      //console.log('infintyScroll '+this.end);
+      const scrollTop = document.documentElement.scrollTop || document.body.scrollTop;
+      const scrollHeight = document.documentElement.scrollHeight || document.body.scrollHeight;
+      const clientHeight = document.documentElement.clientHeight || window.innerHeight;     
+      if (scrollTop + clientHeight >= scrollHeight - 10) {
+        if(!this.end){
+          this.page = this.page + 1;
+          await this.buscarPecas();
+        }
+      }
+    },
+    async buscarPecas(resetPage = false) {
+      if(resetPage){
+        this.page = 1;
+      }
+      var url = "parts/findParts"
+      var item = {
+        page: this.page,
+        limit: 2
+      };
+      if(this.dadosFitler.title != ''){
+        item['title'] = this.dadosFitler.title;
+      }
+      if(this.dadosFitler.state != ''){
+        item['state'] = this.dadosFitler.state;
+      }
+      if(this.dadosFitler.city != ''){
+        item['city'] = this.dadosFitler.city;
+      }
+       if(this.dadosFitler.value != ''){
+        item['value'] = this.dadosFitler.value;
+        item['valueCondition'] = this.dadosFitler.valueCondition;
+      }
+      this.$http.post(url, item).then((response) => {
+        console.log(response.data.Data.length);
+        if(response.data.Data.length == 0){
+          this.end = true;
+        }
+        if(resetPage){
+          this.parts = response.data.Data;
+          console.log();
+        }else{
+          this.parts.push(...response.data.Data);
+        }
+        
       });
+      console.log(this.parts);
     },
-    infiniteHandler($state) {
-      $state.loaded();
+    scrollFilter(){
+        document.documentElement.scrollTop = 250;
+        document.body.scrollTop = 250;
     },
+    buscarState(){
+      this.$http.get("state")
+      .then((response) => {
+        console.log(response.data.Data);
+        this.optionsState = response.data.Data;
+      }).catch((err) => {
+        console.log(err);
+      });
+    },teste(){
+      console.log("teste");
+      console.log(this.dadosFitler.state);
+    }
   },
 };
 </script>
